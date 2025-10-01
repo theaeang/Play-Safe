@@ -1,0 +1,259 @@
+package com.example.safesteps
+
+import android.media.MediaPlayer
+import android.widget.Toast
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ProgressIndicatorDefaults
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
+import androidx.navigation.NavHostController
+import coil.compose.AsyncImage
+import kotlinx.coroutines.delay
+
+@Composable
+fun SafeSteps(navController: NavHostController? = null) {
+    val context = LocalContext.current
+
+    // 🎮 Game state
+    var step by remember { mutableStateOf(0) }
+    var dialogue by remember {
+        mutableStateOf("Welcome to Safe Steps! Let's learn how to cross the street safely. Follow the steps with me!")
+    }
+
+    // 📊 Progress bar
+    var progress by remember { mutableFloatStateOf(0f) }
+
+    // 🎙️ Control bubble visibility while audio plays
+    var isBubbleVisible by remember { mutableStateOf(true) }
+
+    // 🔊 Play audio helper with bubble sync
+    fun playAudio(resId: Int) {
+        val mp = MediaPlayer.create(context, resId)
+        isBubbleVisible = true
+        mp.setOnCompletionListener {
+            it.release()
+            isBubbleVisible = false
+        }
+        mp.start()
+    }
+
+    // Update progress bar
+    LaunchedEffect(step) {
+        progress = when (step) {
+            0 -> 0f
+            1 -> 0.25f
+            2 -> 0.5f
+            3 -> 0.75f
+            4 -> 1f
+            else -> 0f
+        }
+    }
+
+    // 🔄 Hint animation (pulse)
+    val infiniteTransition = rememberInfiniteTransition(label = "hintPulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(600, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseScale"
+    )
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        // 🌆 Background
+        Image(
+            painter = painterResource(id = R.drawable.bg_safe_steps),
+            contentDescription = "Safe Steps",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+
+        // 🔙 Back button
+        Image(
+            painter = painterResource(id = R.drawable.ic_back_arrow),
+            contentDescription = "Back",
+            modifier = Modifier
+                .padding(16.dp)
+                .size(60.dp)
+                .clickable { navController?.popBackStack() },
+            contentScale = ContentScale.Fit
+        )
+
+        // 📊 Progress bar
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = 80.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier
+                    .fillMaxWidth(0.8f)
+                    .height(12.dp),
+                color = ProgressIndicatorDefaults.linearColor,
+                trackColor = ProgressIndicatorDefaults.linearTrackColor,
+                strokeCap = ProgressIndicatorDefaults.LinearStrokeCap
+            )
+        }
+
+        // 🦊 Game content
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Bottom
+        ) {
+            // 💬 Narrator bubble (shows only while audio plays)
+            if (isBubbleVisible) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Narrator image
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_narrator), // mascot image
+                        contentDescription = "Narrator",
+                        modifier = Modifier
+                            .size(80.dp)
+                            .padding(end = 8.dp)
+                    )
+
+                    // Dialogue bubble
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color.White.copy(alpha = 0.9f))
+                            .padding(12.dp)
+                    ) {
+                        Text(
+                            text = dialogue,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Color.Black
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 🚦 Steps
+            when (step) {
+                0 -> {
+                    // STOP
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_stop),
+                        contentDescription = "STOP",
+                        modifier = Modifier
+                            .size(150.dp)
+                            .graphicsLayer(
+                                scaleX = pulseScale,
+                                scaleY = pulseScale
+                            )
+                            .clickable {
+                                step = 1
+                                dialogue = "First things first- we STOP! Never run into the street. Tap the red STOP button to show me you know how to stop."
+                                playAudio(R.raw.stop)
+                            }
+                    )
+                }
+
+                1 -> {
+                    // LOOK → Show cars first
+                    dialogue = "Great stopping! Now we LOOK both ways. Left, then right, then left again. Tap the LOOK button to check for cars."
+
+                    AsyncImage(
+                        model = R.raw.look_cars,
+                        contentDescription = "Cars Coming",
+                        modifier = Modifier.size(180.dp),
+                        contentScale = ContentScale.Fit
+                    )
+
+                    // Wait, then switch to "no cars" and go next
+                    LaunchedEffect(Unit) {
+                        delay(3000) // cars visible
+                        dialogue = "See those cars?That means we wait until they pass. Safety first!"
+                        playAudio(R.raw.cars)
+
+                        delay(3000) // then clear
+                        dialogue = "Good looking! Now close your eyes and LISTEN. Do you hear any cars? Tap LISTEN to practice using your ears."
+                        step = 2
+                        playAudio(R.raw.listen)
+                    }
+                }
+
+                2 -> {
+                    // LISTEN
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_listen),
+                        contentDescription = "LISTEN",
+                        modifier = Modifier
+                            .size(150.dp)
+                            .graphicsLayer(scaleX = pulseScale, scaleY = pulseScale)
+                            .clickable {
+                                step = 3
+                                dialogue = "Perfect! No cars are coming. Now we can CROSS safely. Tap the green CROSS button to walk across."
+                                playAudio(R.raw.cross)
+                            }
+                    )
+                }
+
+                3 -> {
+                    // CROSS
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_cross),
+                        contentDescription = "CROSS",
+                        modifier = Modifier
+                            .size(150.dp)
+                            .graphicsLayer(scaleX = pulseScale, scaleY = pulseScale)
+                            .clickable {
+                                dialogue = "You did it!You followed all the safety steps: STOP, LOOK, LISTEN, CROSS! You're a street safety expert!"
+                                playAudio(R.raw.success)
+
+                                // 🎉 After success, play Quick Review
+                                LaunchedEffect(Unit) {
+                                    delay(5000)
+                                    dialogue = "Remember our street safety rule:Always STOP, LOOK, LISTEN before you CROSS!"
+                                    playAudio(R.raw.quick_review)
+                                }
+                            }
+                    )
+                }
+
+                else -> {
+                    // If somehow out of order
+                    Toast.makeText(
+                        context,
+                        "Whoops! We need to follow all the steps to stay safe.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    dialogue = "Whoops! We need to follow all the steps to stay safe."
+                    playAudio(R.raw.whoops)
+                    step = 0
+                }
+            }
+        }
+    }
+}
